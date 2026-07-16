@@ -1,0 +1,9 @@
+{
+  "name": "leyo-vercel-api",
+  "version": "1.0.0",
+  "description": "乐遇(Leyo) H5 MVP - Vercel Serverless API",
+  "private": true,
+  "engines": {
+    "node": ">=18.x"
+  }
+}
