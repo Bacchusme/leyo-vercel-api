@@ -20,12 +20,12 @@ module.exports = async function handler(req, res) {
   try {
     const { city } = req.query;
 
-    // 构建飞书筛选条件：is_active = true
-    let filter = 'CurrentValue.[is_active] = true';
+    // 构建筛选条件
+    let filter = null;
 
     // 如果指定了城市，追加城市筛选
     if (city) {
-      filter += ` AND CurrentValue.[city] = "${city}"`;
+      filter = `CurrentValue.[city] = "${city}"`;
     }
 
     const records = await queryRecords("locals", filter);
