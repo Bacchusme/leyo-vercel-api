@@ -20,15 +20,19 @@ module.exports = async function handler(req, res) {
   try {
     const { local_name, city } = req.query;
 
-    // 构建飞书筛选条件：is_active = true
-    let filter = "CurrentValue.[is_active] = true";
+    // 构建筛选条件
+    let filter = null;
 
     if (local_name) {
-      filter += ` AND CurrentValue.[local_name] = "${local_name}"`;
+      filter = `CurrentValue.[local_name] = "${local_name}"`;
     }
 
     if (city) {
-      filter += ` AND CurrentValue.[city] = "${city}"`;
+      if (filter) {
+        filter += ` AND CurrentValue.[city] = "${city}"`;
+      } else {
+        filter = `CurrentValue.[city] = "${city}"`;
+      }
     }
 
     const records = await queryRecords("sessions", filter);
