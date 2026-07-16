@@ -18,15 +18,24 @@ module.exports = async function handler(req, res) {
   }
 
   try {
-    const { local_name, session_title, traveler_name, traveler_email, preferred_date, message } =
-      req.body || {};
+    const {
+      guest_name,
+      guest_nationality,
+      guest_email,
+      guest_wechat,
+      guest_photo_url,
+      guest_photo_token,
+      guest_tags,
+      local_name,
+      session_title,
+      message,
+    } = req.body || {};
 
     // 校验必填字段
     const missing = [];
+    if (!guest_name) missing.push("guest_name");
+    if (!guest_email) missing.push("guest_email");
     if (!local_name) missing.push("local_name");
-    if (!session_title) missing.push("session_title");
-    if (!traveler_name) missing.push("traveler_name");
-    if (!traveler_email) missing.push("traveler_email");
 
     if (missing.length > 0) {
       return res.status(400).json({
@@ -37,28 +46,32 @@ module.exports = async function handler(req, res) {
 
     // 校验邮箱格式
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(traveler_email)) {
+    if (!emailRegex.test(guest_email)) {
       return res.status(400).json({
         success: false,
         error: "邮箱格式不正确",
       });
     }
 
-    // 构建写入字段
+    // 构建写入飞书的字段（字段名与飞书 SayHi 表列名一致）
     const fields = {
+      guest_name: guest_name,
+      guest_email: guest_email,
       local_name: local_name,
-      session_title: session_title,
-      traveler_name: traveler_name,
-      traveler_email: traveler_email,
       status: "new",
     };
 
-    if (preferred_date) {
-      fields.preferred_date = preferred_date;
-    }
+    // 可选字段
+    if (guest_nationality) fields.guest_nationality = guest_nationality;
+    if (guest_wechat) fields.guest_wechat = guest_wechat;
+    if (guest_photo_url) fields.guest_photo_url = guest_photo_url;
+    if (guest_tags) fields.guest_tags = guest_tags;
+    if (session_title) fields.session_title = session_title;
+    if (message) fields.message = message;
 
-    if (message) {
-      fields.message = message;
+    // 照片附件：如果有 guest_photo_token，写入 guest_photo 附件字段
+    if (guest_photo_token) {
+      fields.guest_photo = [{ file_token: guest_photo_token }];
     }
 
     const record = await createRecord("sayhi", fields);
