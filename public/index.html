@@ -242,7 +242,8 @@ async function loadLocalsFromAPI(city) {
     if (city && city !== 'all') url += '?city=' + encodeURIComponent(city);
     var resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    return await resp.json();
+    var json = await resp.json();
+    return json.data || json;
   } catch (e) {
     console.error('loadLocalsFromAPI error:', e);
     return [];
@@ -259,7 +260,8 @@ async function loadSessionsFromAPI(filters) {
     var url = API_BASE + '/api/sessions' + (params.toString() ? '?' + params.toString() : '');
     var resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    return await resp.json();
+    var json = await resp.json();
+    return json.data || json;
   } catch (e) {
     console.error('loadSessionsFromAPI error:', e);
     return [];
