@@ -709,7 +709,7 @@ function renderSessionsPage() {
   html += '<section class="px-container-margin py-stack-sm overflow-x-auto hide-scrollbar whitespace-nowrap sticky top-16 bg-surface/90 backdrop-blur z-30">';
   html += renderCitySelector('sessions');
   html += '</section>';
-  html += '<section class="px-container-margin py-stack-lg"><h2 class="text-headline-lg font-headline-lg text-on-background mb-2">Explore Experiences</h2>';
+  html += '<section class="px-container-margin py-stack-lg"><h2 class="text-headline-lg font-headline-lg text-on-background mb-2">Leyo</h2>';
   html += '<p class="text-body-md font-body-md text-secondary">Join an upcoming session \u2014 or say hi to start a new one</p></section>';
 
   if (sayhi.length > 0) {
@@ -762,8 +762,7 @@ function renderSessionsPage() {
       if (host.avatar) { html += '<img class="w-full h-full object-cover" src="' + host.avatar + '">'; }
       else { html += '<div class="w-full h-full flex items-center justify-center text-xs font-bold text-white" style="background:' + (host.color || '#a73a00') + '">' + (host.initial || '?') + '</div>'; }
       html += '</div><div><p class="text-label-sm font-label-sm text-on-background">Hosted by ' + s.hostName + '</p><p class="text-[10px] text-secondary uppercase tracking-wider">HOST</p></div></div>';
-      html += '<div class="mt-auto"><div class="flex justify-between items-end mb-2"><span class="text-label-sm font-label-sm text-secondary">' + s.joined + '/' + s.total + ' Joined</span></div>';
-      html += '<div class="h-1 w-full bg-surface-variant rounded-full overflow-hidden"><div class="h-full bg-primary rounded-full" style="width:' + pct + '%"></div></div></div></div></div>';
+      html += '<div class="mt-auto"></div></div></div>';
     });
     html += '</div></section>';
   }
