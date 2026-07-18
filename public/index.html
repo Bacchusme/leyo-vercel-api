@@ -333,15 +333,37 @@ function transformAPILocal(item) {
 
 function parseReviews(text) {
   if (!text) return [];
-  return text.split('\n').filter(function(line) { return line.trim(); }).map(function(line) {
+  var lines = text.split('\n').filter(function(line) { return line.trim(); });
+  // Deduplicate: if same text appears more than once, keep only first
+  var seen = {};
+  return lines.filter(function(line) {
+    var key = line.trim();
+    if (seen[key]) return false;
+    seen[key] = true;
+    return true;
+  }).map(function(line) {
+    line = line.trim();
+    // Format: "★★★★★ Name (date): review text"
+    var m = line.match(/^([★☆\u2605\u2606]*)\s*(.+?)\s*\(([^)]*)\)\s*[:：]\s*(.+)$/);
+    if (m) {
+      var starsRaw = m[1] || '';
+      var name = m[2].trim();
+      var date = m[3].trim();
+      var reviewText = m[4].trim();
+      // Normalize stars
+      var starCount = (starsRaw.match(/[\u2605★]/g) || []).length;
+      if (starCount === 0) starCount = 5;
+      var stars = '';
+      for (var i = 0; i < starCount; i++) stars += '\u2605';
+      return { av: name.charAt(0), name: name, date: date, stars: stars, text: reviewText };
+    }
+    // Fallback: pipe-separated format "name|date|stars|text"
     var parts = line.split('|');
-    return {
-      av: parts[0] ? parts[0].trim().charAt(0) : '?',
-      name: parts[0] ? parts[0].trim() : 'Anonymous',
-      date: parts[1] ? parts[1].trim() : '',
-      stars: parts[2] ? parts[2].trim() : '\u2605\u2605\u2605\u2605\u2605',
-      text: parts[3] ? parts[3].trim() : line.trim()
-    };
+    if (parts.length >= 4) {
+      return { av: parts[0].trim().charAt(0), name: parts[0].trim(), date: parts[1].trim(), stars: parts[2].trim(), text: parts[3].trim() };
+    }
+    // Last fallback: just show as text
+    return { av: '?', name: 'Review', date: '', stars: '\u2605\u2605\u2605\u2605\u2605', text: line };
   });
 }
 
@@ -543,7 +565,7 @@ function renderCitySelector(activeTab) {
   allCities.forEach(function(c) {
     var isActive = c === currentCity;
     var cls = isActive ? 'pill-active' : 'pill-inactive';
-    html += '<button class="' + cls + ' px-4 py-2 rounded-full text-label-sm font-label-sm transition-transform active:scale-95 hover:bg-surface-container-lowest" onclick="switchCity(\'' + c + '\',\'' + activeTab + '\')">' + cityLabels[c] + '</button>';
+    html += '<button class="' + cls + ' px-4 py-2 rounded-full text-label-sm font-label-sm transition-transform active:scale-95" onclick="switchCity(\'' + c + '\',\'' + activeTab + '\')">' + cityLabels[c] + '</button>';
   });
   html += '</div>';
   return html;
@@ -634,7 +656,7 @@ function renderLocalsPage() {
     var sessions = l.activities || [];
     var tags = (l.tags || []).map(function(t) {
       var label = t.indexOf(' \u00b7 ') >= 0 ? t.split(' \u00b7 ')[0] : t;
-      return '<span class="border border-[#E5E5E5] rounded text-label-sm font-label-sm text-secondary px-2 py-1">' + label + '</span>';
+      return '<span class="border border-[#E5E5E5] rounded text-label-sm font-label-sm text-secondary px-2 py-1 whitespace-nowrap">' + label + '</span>';
     }).join('');
 
     html += '<article class="border border-[#E5E5E5] rounded-lg p-5 bg-surface-container-lowest active:scale-[0.99] transition-transform duration-150 cursor-pointer" onclick="goTo(\'locals\',\'' + l.id + '\')">';
@@ -642,14 +664,14 @@ function renderLocalsPage() {
     html += avatarHTML(l, 50);
     html += '<div><h2 class="text-headline-md font-headline-md text-on-surface">' + l.name + '</h2>';
     html += '<p class="text-body-md font-body-md text-secondary mt-1">' + l.tagline + '</p></div></div>';
-    html += '<div class="flex gap-2 mb-4">' + tags + '</div>';
+    html += '<div class="flex flex-wrap gap-2 mb-4">' + tags + '</div>';
     html += '<hr class="border-[#E5E5E5] mb-4"><ul class="space-y-3 mb-5">';
     sessions.slice(0, 2).forEach(function(a, i) {
       html += '<li class="flex items-start gap-3"><span class="flex-shrink-0 w-6 h-6 rounded-full bg-surface-container flex items-center justify-center text-label-sm font-label-sm text-on-surface mt-0.5">' + (i + 1) + '</span>';
       html += '<span class="text-body-md font-body-md text-on-surface"><span class="mr-1">' + (a.e || '') + '</span> ' + (a.t || '') + '</span></li>';
     });
     html += '</ul>';
-    html += '<span class="inline-flex items-center text-primary font-bold text-body-md font-body-md hover:text-primary-container transition-colors">View profile <span class="material-symbols-outlined ml-1 text-[18px]">arrow_forward</span></span>';
+    html += '<span class="inline-flex items-center text-primary font-bold text-body-md font-body-md hover:text-primary-container transition-colors">View profile &#8594;</span>';
     html += '</article>';
   });
 
@@ -702,7 +724,7 @@ function renderSessionsPage() {
       else { html += '<div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-white" style="background:' + (host.color || '#a73a00') + '">' + (host.initial || '?') + '</div>'; }
       html += '</div><span class="text-label-sm font-label-sm text-secondary">Hosted by ' + s.hostName + '</span></div>';
       html += '<div class="flex flex-wrap gap-2 mb-4">';
-      (s.tags || []).forEach(function(t) { html += '<span class="px-2 py-1 border border-outline-variant/30 rounded text-label-sm font-label-sm text-on-surface-variant">' + t + '</span>'; });
+      (s.tags || []).forEach(function(t) { html += '<span class="px-2 py-1 border border-outline-variant/30 rounded text-label-sm font-label-sm text-on-surface-variant whitespace-nowrap">' + t + '</span>'; });
       html += '</div><div class="mt-auto pt-4 border-t border-outline-variant/20 flex items-center justify-between">';
       html += '<span class="text-label-sm font-label-sm text-secondary">' + (s.hangs || 0) + ' Hangs</span>';
       html += '<button class="bg-surface-container-low text-on-surface px-4 py-2 rounded-full text-label-sm font-label-sm font-bold border border-outline-variant/50 hover:bg-surface-variant transition-colors" onclick="event.stopPropagation();goTo(\'sessions\',\'' + s.id + '\')">Say Hi \ud83d\udc4b</button>';
@@ -710,7 +732,7 @@ function renderSessionsPage() {
     });
 
     if (sayhi.length > 6 && !showAllSayHi) {
-      html += '</div><div class="flex justify-end mt-3"><button onclick="window.__showAllSayHi=true;renderSessionsPage();" class="text-primary font-bold text-body-md hover:opacity-80 transition-opacity flex items-center gap-1">View All <span class="material-symbols-outlined text-[18px]">arrow_forward</span></button></div></section>';
+      html += '</div><div class="flex justify-end mt-3"><button onclick="window.__showAllSayHi=true;renderSessionsPage();" class="text-primary font-bold text-body-md hover:opacity-80 transition-opacity flex items-center gap-1">View All &#8594;</button></div></section>';
     } else { html += '</div></section>'; }
   }
 
@@ -757,14 +779,14 @@ function renderLocalDetail(localId) {
 
   var html = '';
   html += '<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md flex items-center justify-between px-container-margin py-4 w-full border-b border-surface-variant/30">';
-  html += '<button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors"><span class="material-symbols-outlined text-on-surface">arrow_back</span></button>';
-  html += '<h1 class="text-headline-md font-headline-md text-on-surface">Profile</h1><div class="w-10 h-10"></div></header>';
+  html += '<button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors text-xl text-on-surface">&#8592;</button>';
+  html += '<h1 class="text-headline-md font-headline-md text-on-surface">' + l.name + '</h1><div class="w-10 h-10"></div></header>';
   html += '<main class="px-container-margin flex flex-col gap-stack-lg pt-stack-md">';
   html += '<section class="flex flex-col items-center text-center gap-stack-md"><div class="relative">' + avatarHTML(l, 82) + '</div>';
   html += '<div class="flex flex-col gap-1"><h2 class="text-headline-lg font-headline-lg text-on-surface">' + l.name + '</h2>';
   html += '<p class="text-body-md font-body-md text-on-surface-variant">' + l.tagline + '</p></div>';
   html += '<div class="flex flex-wrap justify-center gap-2 mt-2">';
-  (l.tags2 || []).forEach(function(t) { html += '<span class="px-3 py-1 rounded-full border border-outline text-label-sm font-label-sm text-on-surface flex items-center gap-1">' + t + '</span>'; });
+  (l.tags2 || []).forEach(function(t) { html += '<span class="px-3 py-1 rounded-full border border-outline text-label-sm font-label-sm text-on-surface flex items-center gap-1 whitespace-nowrap">' + t + '</span>'; });
   html += '</div>';
   html += '<blockquote class="text-quote-accent font-quote-accent text-on-surface-variant italic mt-4 px-4 border-l-2 border-primary text-left bg-surface-container-low/50 py-3 rounded-r-lg w-full">' + l.bio + '</blockquote></section>';
 
@@ -838,33 +860,33 @@ function renderSessionDetail(sessionId) {
   var isSayHi = s.type === 'sayhi';
   var container = document.getElementById('pageContainer');
 
-  var infoGrid = '';
+  var infoGrid = '<section class="grid grid-cols-2 gap-3">';
   if (isSayHi) {
-    infoGrid = '<section class="grid grid-cols-2 gap-3">';
-    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">location_on</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Location</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.grid ? s.grid.location : '') + '</span></div>';
+    var locText = (s.grid && s.grid.location) ? s.grid.location : 'Flexible';
+    if (locText.length > 20) locText = locText.substring(0, 18) + '...';
+    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">location_on</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Location</span></div><span class="text-body-md font-body-md text-on-surface font-medium truncate" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;display:block">' + (s.grid ? s.grid.location : 'Flexible') + '</span></div>';
     infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">schedule</span><span class="text-[10px] font-label-sm uppercase tracking-wider">When</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.flex || 'Flexible') + '</span></div>';
-    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">group</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Experience</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.hangs || 0) + ' hangs</span></div>';
+    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">group</span><span class="text-[10px] font-label-sm uppercase tracking-wider">People</span></div><span class="text-body-md font-body-md text-on-surface font-medium">Max ' + (s.grid ? s.grid.people : '4') + '</span></div>';
     infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">star</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Rating</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.rating || '\u2013') + '</span></div></section>';
   } else {
-    infoGrid = '<section class="grid grid-cols-2 gap-3">';
     infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">calendar_today</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Date</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.grid ? s.grid.date : '') + '</span></div>';
     infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">schedule</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Time</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.grid ? s.grid.time : '') + '</span></div>';
-    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">location_on</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Location</span></div><span class="text-body-md font-body-md text-on-surface font-medium truncate">' + (s.grid ? s.grid.location : '') + '</span></div>';
+    infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">location_on</span><span class="text-[10px] font-label-sm uppercase tracking-wider">Location</span></div><span class="text-body-md font-body-md text-on-surface font-medium truncate" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:140px;display:block">' + (s.grid ? s.grid.location : '') + '</span></div>';
     infoGrid += '<div class="flex flex-col gap-1 p-3 bg-surface-container-low rounded-xl border border-surface-variant/50"><div class="flex items-center gap-1.5 text-secondary"><span class="material-symbols-outlined text-[18px]">group</span><span class="text-[10px] font-label-sm uppercase tracking-wider">People</span></div><span class="text-body-md font-body-md text-on-surface font-medium">' + (s.grid ? s.grid.people : '') + '</span></div></section>';
   }
 
   var html = '';
   html += '<header class="fixed top-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-md flex justify-between items-center px-container-margin h-16 border-b border-surface-variant/50">';
-  html += '<button onclick="history.back()" class="p-2 -ml-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 text-on-surface"><span class="material-symbols-outlined">arrow_back</span></button>';
-  html += '<h1 class="text-headline-md font-headline-md text-on-surface">Session</h1><div class="w-10"></div></header>';
+  html += '<button onclick="history.back()" class="p-2 -ml-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 text-on-surface text-xl">&#8592;</button>';
+  html += '<h1 class="text-headline-md font-headline-md text-on-surface truncate max-w-[50%] text-center">' + s.title + '</h1><div class="w-10"></div></header>';
   html += '<div class="mt-16 w-full h-[240px] relative rounded-b-2xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">';
   if (s.img) { html += '<img class="w-full h-full object-cover" src="' + s.img + '" alt="' + s.title + '" loading="lazy" onerror="this.parentElement.style.background=\'linear-gradient(135deg,#ff5c00,#ffb59a)\'">'; }
   else { html += '<div class="w-full h-full flex items-center justify-center text-6xl" style="background:linear-gradient(135deg,#ff5c00,#ffb59a)">' + s.emoji + '</div>'; }
   html += '<div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div></div>';
 
-  html += '<main class="px-container-margin py-stack-md flex flex-col gap-stack-lg">';
+  html += '<main class="px-container-margin py-stack-md flex flex-col gap-stack-lg pb-32">';
   html += '<section class="flex flex-col gap-3"><h1 class="text-headline-lg font-headline-lg text-on-surface leading-tight">' + s.emoji + ' ' + s.title + '</h1><div class="flex flex-wrap gap-2">';
-  (s.tags || []).forEach(function(t) { html += '<span class="px-3 py-1 rounded-full border border-outline-variant text-label-sm font-label-sm text-on-surface-variant bg-surface-container-lowest">' + t + '</span>'; });
+  (s.tags || []).forEach(function(t) { html += '<span class="px-3 py-1 rounded-full border border-outline-variant text-label-sm font-label-sm text-on-surface-variant bg-surface-container-lowest whitespace-nowrap">' + t + '</span>'; });
   html += '</div></section>';
   html += infoGrid;
 
@@ -927,7 +949,7 @@ function renderSayHiForm(hostId) {
 
   var html = '';
   html += '<header class="sticky top-0 z-40 bg-surface/90 backdrop-blur-md flex justify-between items-center w-full px-container-margin py-stack-md h-16">';
-  html += '<button onclick="history.back()" class="text-on-surface hover:opacity-80 transition-opacity flex items-center justify-center p-2 -ml-2"><span class="material-symbols-outlined">arrow_back</span></button>';
+  html += '<button onclick="history.back()" class="text-on-surface hover:opacity-80 transition-opacity flex items-center justify-center p-2 -ml-2 text-xl">&#8592;</button>';
   html += '<h1 class="text-headline-md font-headline-md text-on-surface absolute left-1/2 -translate-x-1/2">Say Hi</h1><div class="w-10"></div></header>';
   html += '<main class="flex-1 flex flex-col pb-32">';
   html += '<section class="px-container-margin py-stack-lg flex flex-col gap-stack-sm"><div class="text-headline-lg font-headline-lg text-on-surface flex items-center gap-2"><span>\ud83d\udc4b</span><h2>Say Hi to ' + hostName + '</h2></div>';
