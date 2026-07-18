@@ -1144,4 +1144,19 @@ function renderSuccessPage() {
   container.innerHTML = '<div class="min-h-[80vh] flex flex-col items-center justify-center relative overflow-hidden bg-surface px-container-margin">'
     + '<div class="absolute inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center"><div class="w-[120vw] h-[120vw] md:w-[60vw] md:h-[60vw] rounded-full bg-primary-container/5 blur-[100px] absolute mix-blend-multiply"></div></div>'
     + '<div class="mb-stack-lg animate-scale-in relative z-10"><div class="w-24 h-24 rounded-full bg-primary-fixed flex items-center justify-center border border-outline-variant/30 whisper-shadow"><span class="material-symbols-outlined text-[48px] text-primary" style="font-variation-settings:\'FILL\' 1">check_circle</span></div></div>'
-    + '<h1 class="text-headline-lg font-headline-lg text-on-surface mb-stack
+    + '<h1 class="text-headline-lg font-headline-lg text-on-surface mb-stack-md animate-slide-up-1 relative z-10 text-center">Your Say Hi has been sent!</h1>'
+    + '<p class="text-body-lg font-body-lg text-on-surface-variant max-w-[280px] mx-auto mb-stack-lg animate-slide-up-2 relative z-10 text-center">We\'ll connect you with your new friend within 24 hours. Check your email for updates.</p>'
+    + '<div class="w-full max-w-md mt-stack-md animate-slide-up-3 relative z-10"><button onclick="location.hash=\'locals/' + currentCity + '\'" class="w-full py-4 px-6 rounded-full border border-outline-variant text-on-surface text-headline-md font-headline-md bg-transparent hover:bg-surface-container-low transition-colors duration-300">Back to browsing</button></div></div>';
+}
+
+// ══════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════
+window.addEventListener('hashchange', handleRoute);
+window.addEventListener('load', function() {
+  loadAllData().then(function() { handleRoute(); });
+});
+
+</script>
+</body>
+</html>
