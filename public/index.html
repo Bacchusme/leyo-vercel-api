@@ -96,6 +96,10 @@ body { -webkit-tap-highlight-color: transparent; }
 .animate-slide-up-1 { opacity:0; animation: slideUpFade 0.6s cubic-bezier(0.16,1,0.3,1) 0.2s forwards; }
 .animate-slide-up-2 { opacity:0; animation: slideUpFade 0.6s cubic-bezier(0.16,1,0.3,1) 0.3s forwards; }
 .animate-slide-up-3 { opacity:0; animation: slideUpFade 0.6s cubic-bezier(0.16,1,0.3,1) 0.4s forwards; }
+.img-skeleton { background: linear-gradient(110deg, #ededed 8%, #f5f5f5 18%, #ededed 33%); background-size: 200% 100%; animation: imgShimmer 1.5s linear infinite; }
+@keyframes imgShimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+.img-fade { opacity:0; transition: opacity 0.4s ease; }
+.img-fade.loaded { opacity:1; }
 .page { display:none; }
 .page.active { display:block; }
 
@@ -451,7 +455,9 @@ async function loadAllData() {
       loc.upcoming = mySessions.filter(function(s) { return s.type === 'upcoming'; }).map(function(s) {
         return { e: s.emoji, t: s.title, m: (s.grid ? s.grid.date : '') + ' \u00b7 ' + (s.grid && s.grid.location ? s.grid.location : ''), img: s.img };
       });
-      loc.activities = loc.avail;
+      loc.activities = mySessions.map(function(s) {
+        return { e: s.emoji, t: s.title, m: (s.grid && s.grid.location ? s.grid.location : 'Flexible') + ' · ' + (s.cost || 'Free'), img: s.img };
+      });
     });
 
     _dataLoaded = true;
@@ -609,10 +615,11 @@ function getLocalSessions(localId) {
   return result;
 }
 
-function avatarHTML(l, size) {
+function avatarHTML(l, size, eager) {
   var s = size || 50;
   if (l.avatar) {
-    return '<img src="' + l.avatar + '" alt="' + l.name + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover;box-shadow:0 1px 3px rgba(0,0,0,.1)" />';
+    var loadAttr = eager ? ' loading="eager"' : ' loading="lazy"';
+    return '<div class="img-skeleton" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.1)"><img src="' + l.avatar + '" alt="' + l.name + '" class="img-fade" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover" onload="this.classList.add(\'loaded\')" onerror="this.parentElement.classList.remove(\'img-skeleton\')"' + loadAttr + ' /></div>';
   }
   return '<div style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + l.color + ';display:flex;align-items:center;justify-content:center;font-size:' + Math.round(s * 0.4) + 'px;font-weight:700;color:#fff;flex-shrink:0">' + l.initial + '</div>';
 }
@@ -652,8 +659,9 @@ function renderLocalsPage() {
     html += '<div style="text-align:center;padding:40px;color:#888"><p>No locals found in ' + cityLabel + ' yet.</p><p style="font-size:12px;margin-top:8px">Try another city!</p></div>';
   }
 
-  locals.forEach(function(l) {
+  locals.forEach(function(l, idx) {
     var sessions = l.activities || [];
+    var isEager = idx < 2;
     var tags = (l.tags || []).map(function(t) {
       var label = t.indexOf(' \u00b7 ') >= 0 ? t.split(' \u00b7 ')[0] : t;
       return '<span class="border border-[#E5E5E5] rounded text-label-sm font-label-sm text-secondary px-2 py-1 whitespace-nowrap">' + label + '</span>';
@@ -661,7 +669,7 @@ function renderLocalsPage() {
 
     html += '<article class="border border-[#E5E5E5] rounded-lg p-5 bg-surface-container-lowest active:scale-[0.99] transition-transform duration-150 cursor-pointer" onclick="goTo(\'locals\',\'' + l.id + '\')">';
     html += '<div class="flex items-center gap-4 mb-4">';
-    html += avatarHTML(l, 50);
+    html += avatarHTML(l, 50, isEager);
     html += '<div><h2 class="text-headline-md font-headline-md text-on-surface">' + l.name + '</h2>';
     html += '<p class="text-body-md font-body-md text-secondary mt-1">' + l.tagline + '</p></div></div>';
     html += '<div class="flex flex-wrap gap-2 mb-4">' + tags + '</div>';
@@ -710,17 +718,19 @@ function renderSessionsPage() {
     var showAllSayHi = window.__showAllSayHi === true;
     var sayhiDisplay = showAllSayHi ? sayhi : sayhi.slice(0, 6);
 
+    var _imgIdx = 0;
     sayhiDisplay.forEach(function(s) {
       var host = findHostByName(s.hostId);
+      var _eager = _imgIdx < 3; _imgIdx++;
       html += '<div class="bg-surface rounded-lg border border-outline-variant/30 overflow-hidden flex flex-col group hover:-translate-y-1 transition-transform duration-300 whisper-shadow cursor-pointer" onclick="goTo(\'sessions\',\'' + s.id + '\')">';
-      html += '<div class="h-40 w-full relative">';
-      if (s.img) { html += '<img class="w-full h-full object-cover" src="' + s.img + '" alt="' + s.title + '" loading="lazy" onerror="this.style.display=\'none\'">'; }
+      html += '<div class="h-40 w-full relative img-skeleton">';
+      if (s.img) { html += '<img class="w-full h-full object-cover img-fade" src="' + s.img + '" alt="' + s.title + '"' + (_eager ? ' loading="eager"' : ' loading="lazy"') + ' onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\';this.parentElement.classList.remove(\'img-skeleton\')">'; }
       else { html += '<div class="w-full h-full bg-gradient-to-br from-primary-container/30 to-primary/10 flex items-center justify-center text-4xl">' + s.emoji + '</div>'; }
       html += '<div class="absolute top-3 right-3 bg-surface-container-lowest/90 backdrop-blur-sm px-2 py-1 rounded-full text-label-sm font-label-sm border border-outline-variant/20 flex items-center gap-1">';
       html += '<span class="material-symbols-outlined text-[14px] text-primary" style="font-variation-settings:\'FILL\' 1">star</span> ' + (s.rating || '\u2013') + '</div></div>';
       html += '<div class="p-4 flex flex-col flex-grow"><h4 class="text-headline-md font-headline-md text-on-background mb-1">' + s.emoji + ' ' + s.title + '</h4>';
       html += '<div class="flex items-center gap-2 mb-3"><div class="w-[18px] h-[18px] rounded-full overflow-hidden border border-surface-container-lowest flex-shrink-0">';
-      if (host.avatar) { html += '<img class="w-full h-full object-cover" src="' + host.avatar + '">'; }
+      if (host.avatar) { html += '<img class="w-full h-full object-cover img-fade" src="' + host.avatar + '" onload="this.classList.add(\'loaded\')">'; }
       else { html += '<div class="w-full h-full flex items-center justify-center text-[10px] font-bold text-white" style="background:' + (host.color || '#a73a00') + '">' + (host.initial || '?') + '</div>'; }
       html += '</div><span class="text-label-sm font-label-sm text-secondary">Hosted by ' + s.hostName + '</span></div>';
       html += '<div class="flex flex-wrap gap-2 mb-4">';
@@ -742,8 +752,8 @@ function renderSessionsPage() {
       var host = findHostByName(s.hostId);
       var pct = s.total > 0 ? Math.round((s.joined / s.total) * 100) : 0;
       html += '<div class="bg-surface rounded-lg border border-outline-variant/30 overflow-hidden flex flex-col md:flex-row whisper-shadow cursor-pointer" onclick="goTo(\'sessions\',\'' + s.id + '\')">';
-      html += '<div class="md:w-2/5 h-48 md:h-auto relative">';
-      if (s.img) { html += '<img class="w-full h-full object-cover" src="' + s.img + '" alt="' + s.title + '" loading="lazy" onerror="this.style.display=\'none\'">'; }
+      html += '<div class="md:w-2/5 h-48 md:h-auto relative img-skeleton">';
+      if (s.img) { html += '<img class="w-full h-full object-cover img-fade" src="' + s.img + '" alt="' + s.title + '" loading="lazy" onload="this.classList.add(\'loaded\')" onerror="this.style.display=\'none\';this.parentElement.classList.remove(\'img-skeleton\')">'; }
       else { html += '<div class="w-full h-full bg-gradient-to-br from-primary-container/30 to-primary/10 flex items-center justify-center text-5xl">' + s.emoji + '</div>'; }
       html += '</div><div class="p-5 md:w-3/5 flex flex-col"><h4 class="text-headline-md font-headline-md text-on-background mb-3">' + s.emoji + ' ' + s.title + '</h4>';
       html += '<div class="grid grid-cols-2 gap-3 mb-4"><div class="flex items-center gap-2"><span class="material-symbols-outlined text-[20px] text-secondary">calendar_today</span><span class="text-body-md font-body-md text-on-surface-variant">' + (s.grid ? s.grid.date : '') + '</span></div>';
@@ -781,7 +791,7 @@ function renderLocalDetail(localId) {
   html += '<header class="sticky top-0 z-40 bg-surface/80 backdrop-blur-md flex items-center justify-between px-container-margin py-4 w-full border-b border-surface-variant/30">';
   html += '<button onclick="history.back()" class="w-10 h-10 flex items-center justify-center rounded-full hover:bg-surface-variant transition-colors text-xl text-on-surface">&#8592;</button>';
   html += '<h1 class="text-headline-md font-headline-md text-on-surface">' + l.name + '</h1><div class="w-10 h-10"></div></header>';
-  html += '<main class="px-container-margin flex flex-col gap-stack-lg pt-stack-md">';
+  html += '<main class="px-container-margin flex flex-col gap-stack-lg pt-stack-md pb-28">';
   html += '<section class="flex flex-col items-center text-center gap-stack-md"><div class="relative">' + avatarHTML(l, 82) + '</div>';
   html += '<div class="flex flex-col gap-1"><h2 class="text-headline-lg font-headline-lg text-on-surface">' + l.name + '</h2>';
   html += '<p class="text-body-md font-body-md text-on-surface-variant">' + l.tagline + '</p></div>';
@@ -810,8 +820,8 @@ function renderLocalDetail(localId) {
     var session = findSessionByHostAndTitle(l.name, a.t);
     var clickAction = session ? "goTo('sessions','" + session.id + "')" : "goTo('say-hi','" + l.id + "')";
     html += '<div class="min-w-[240px] flex-shrink-0 bg-surface rounded-xl border border-outline-variant/30 shadow-sm overflow-hidden flex flex-col snap-start cursor-pointer" onclick="' + clickAction + '">';
-    html += '<div class="h-32 bg-surface-container w-full relative">';
-    if (a.img) { html += '<img class="w-full h-full object-cover" src="' + a.img + '" loading="lazy">'; }
+    html += '<div class="h-32 bg-surface-container w-full relative img-skeleton">';
+    if (a.img) { html += '<img class="w-full h-full object-cover img-fade" src="' + a.img + '" loading="lazy" onload="this.classList.add(\'loaded\')">'; }
     else { html += '<div class="w-full h-full flex items-center justify-center text-4xl">' + a.e + '</div>'; }
     html += '</div><div class="p-4 flex flex-col gap-3 flex-1"><h4 class="text-body-lg font-body-lg font-semibold text-on-surface leading-tight">' + a.e + ' ' + a.t + '</h4>';
     html += '<div class="text-body-md font-body-md text-on-surface-variant flex flex-col gap-1"><span class="flex items-center gap-2"><span class="material-symbols-outlined text-[18px]">info</span> ' + a.m + '</span></div>';
@@ -878,13 +888,14 @@ function renderSessionDetail(sessionId) {
   var html = '';
   html += '<header class="fixed top-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-md flex justify-between items-center px-container-margin h-16 border-b border-surface-variant/50">';
   html += '<button onclick="history.back()" class="p-2 -ml-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 text-on-surface text-xl">&#8592;</button>';
-  html += '<h1 class="text-headline-md font-headline-md text-on-surface truncate max-w-[50%] text-center">' + s.title + '</h1><div class="w-10"></div></header>';
+  html += '<div class="flex-1"></div></header>';
   html += '<div class="mt-16 w-full h-[240px] relative rounded-b-2xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">';
-  if (s.img) { html += '<img class="w-full h-full object-cover" src="' + s.img + '" alt="' + s.title + '" loading="lazy" onerror="this.parentElement.style.background=\'linear-gradient(135deg,#ff5c00,#ffb59a)\'">'; }
+  html += '<div class="img-skeleton w-full h-full absolute inset-0"></div>';
+  if (s.img) { html += '<img class="w-full h-full object-cover img-fade relative" src="' + s.img + '" alt="' + s.title + '" loading="eager" onload="this.classList.add(\'loaded\');this.parentElement.querySelector(\'.img-skeleton\').style.display=\'none\'" onerror="this.parentElement.style.background=\'linear-gradient(135deg,#ff5c00,#ffb59a)\';this.parentElement.querySelector(\'.img-skeleton\').style.display=\'none\'">'; }
   else { html += '<div class="w-full h-full flex items-center justify-center text-6xl" style="background:linear-gradient(135deg,#ff5c00,#ffb59a)">' + s.emoji + '</div>'; }
   html += '<div class="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent"></div></div>';
 
-  html += '<main class="px-container-margin py-stack-md flex flex-col gap-stack-lg pb-32">';
+  html += '<main class="px-container-margin py-stack-md flex flex-col gap-stack-lg pb-24">';
   html += '<section class="flex flex-col gap-3"><h1 class="text-headline-lg font-headline-lg text-on-surface leading-tight">' + s.emoji + ' ' + s.title + '</h1><div class="flex flex-wrap gap-2">';
   (s.tags || []).forEach(function(t) { html += '<span class="px-3 py-1 rounded-full border border-outline-variant text-label-sm font-label-sm text-on-surface-variant bg-surface-container-lowest whitespace-nowrap">' + t + '</span>'; });
   html += '</div></section>';
@@ -900,7 +911,7 @@ function renderSessionDetail(sessionId) {
 
   if (s.detailImgs && s.detailImgs.length) {
     html += '<section class="flex flex-col gap-3"><h2 class="text-headline-md font-headline-md text-on-surface">Gallery</h2><div class="grid grid-cols-2 gap-gutter">';
-    s.detailImgs.forEach(function(img) { html += '<div class="h-32 bg-cover bg-center rounded-xl shadow-sm overflow-hidden"><img src="' + img + '" class="w-full h-full object-cover" loading="lazy"></div>'; });
+    s.detailImgs.forEach(function(img) { html += '<div class="h-32 bg-cover bg-center rounded-xl shadow-sm overflow-hidden img-skeleton"><img src="' + img + '" class="w-full h-full object-cover img-fade" loading="lazy" onload="this.classList.add(\'loaded\')" onerror="this.parentElement.classList.remove(\'img-skeleton\')"></div>'; });
     html += '</div></section>';
   }
 
@@ -932,7 +943,7 @@ function renderSessionDetail(sessionId) {
   }
 
   html += '</main>';
-  html += '<div class="fixed bottom-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-t border-outline-variant/20 px-container-margin py-4 pb-safe-area-bottom shadow-[0px_-4px_20px_rgba(0,0,0,0.03)]">';
+  html += '<div class="fixed bottom-0 left-0 w-full z-50 bg-surface/80 backdrop-blur-xl border-t border-outline-variant/20 px-container-margin pt-3 pb-[max(12px,env(safe-area-inset-bottom))] shadow-[0px_-4px_20px_rgba(0,0,0,0.03)]">';
   html += '<button onclick="goTo(\'say-hi\',\'' + (hostData ? hostData.id : s.hostId) + '\')" class="w-full bg-primary-container text-on-primary-container h-14 rounded-full flex flex-col items-center justify-center shadow-[0px_4px_12px_rgba(255,92,0,0.2)] active:scale-[0.98] transition-transform">';
   html += '<span class="text-[16px] font-bold leading-none mb-1">' + (isSayHi ? 'Say Hi \ud83d\udc4b' : 'Count Me In! \ud83d\ude4b') + '</span>';
   html += '<span class="text-[10px] opacity-80 leading-none font-medium">' + (isSayHi ? 'Start a conversation' : (s.grid && s.grid.spotsLeft ? s.grid.spotsLeft : 'Limited spots')) + '</span></button></div>';
