@@ -226,6 +226,19 @@ body { -webkit-tap-highlight-color: transparent; }
 // API CONFIGURATION
 // ══════════════════════════════════════════════════
 var API_BASE = 'https://leyo-vercel-api-l79c.vercel.app';
+
+// 将飞书媒体URL转为代理URL，解决浏览器无法直接访问飞书图片的问题
+function toProxyUrl(url) {
+  if (!url || typeof url !== 'string') return '';
+  // 已经是代理URL，直接返回
+  if (url.indexOf('/api/image?') !== -1) return url;
+  // 飞书媒体URL，提取file_token走代理
+  if (url.indexOf('open.feishu.cn/open-apis/drive/v1/medias/') !== -1) {
+    var match = url.match(/medias\/([^\/]+)\//);
+    if (match) return API_BASE + '/api/image?token=' + match[1];
+  }
+  return url;
+}
 var _localsCache = [];
 var _sessionsCache = [];
 var _dataLoaded = false;
@@ -279,9 +292,17 @@ function transformAPILocal(item) {
   var name = item.name || 'Unknown';
   var avatarUrl = '';
   if (item.avatar_url) {
-    avatarUrl = item.avatar_url;
+    avatarUrl = toProxyUrl(item.avatar_url);
+  } else if (Array.isArray(item.avatar) && item.avatar.length > 0) {
+    // 附件字段：数组格式 [{url, file_token, name}]
+    var att = item.avatar[0];
+    if (att.file_token) {
+      avatarUrl = API_BASE + '/api/image?token=' + att.file_token;
+    } else if (att.url) {
+      avatarUrl = toProxyUrl(att.url);
+    }
   } else if (typeof item.avatar === 'string' && (item.avatar.startsWith('http') || item.avatar.startsWith('data:'))) {
-    avatarUrl = item.avatar;
+    avatarUrl = toProxyUrl(item.avatar);
   }
   var hangs = parseInt(item.hangs) || 0;
   var rating = parseFloat(item.rating) || 4.5;
@@ -327,10 +348,19 @@ function parseReviews(text) {
 function transformAPISession(item) {
   var gallary = Array.isArray(item.gallary) ? item.gallary : [];
   var imgUrl = '';
-  if (gallary.length > 0 && gallary[0].url) {
-    imgUrl = gallary[0].url;
+  if (gallary.length > 0) {
+    var g0 = gallary[0];
+    if (g0.file_token) {
+      imgUrl = API_BASE + '/api/image?token=' + g0.file_token;
+    } else if (g0.url) {
+      imgUrl = toProxyUrl(g0.url);
+    }
   }
-  var detailImgs = gallary.slice(1).map(function(g) { return g.url || ''; }).filter(Boolean);
+  var detailImgs = gallary.slice(1).map(function(g) {
+    if (g.file_token) return API_BASE + '/api/image?token=' + g.file_token;
+    if (g.url) return toProxyUrl(g.url);
+    return '';
+  }).filter(Boolean);
   var reviews = parseReviews(item.reviews);
   var ratingStr = '';
   if (reviews.length > 0) {
@@ -1114,19 +1144,4 @@ function renderSuccessPage() {
   container.innerHTML = '<div class="min-h-[80vh] flex flex-col items-center justify-center relative overflow-hidden bg-surface px-container-margin">'
     + '<div class="absolute inset-0 pointer-events-none z-0 overflow-hidden flex items-center justify-center"><div class="w-[120vw] h-[120vw] md:w-[60vw] md:h-[60vw] rounded-full bg-primary-container/5 blur-[100px] absolute mix-blend-multiply"></div></div>'
     + '<div class="mb-stack-lg animate-scale-in relative z-10"><div class="w-24 h-24 rounded-full bg-primary-fixed flex items-center justify-center border border-outline-variant/30 whisper-shadow"><span class="material-symbols-outlined text-[48px] text-primary" style="font-variation-settings:\'FILL\' 1">check_circle</span></div></div>'
-    + '<h1 class="text-headline-lg font-headline-lg text-on-surface mb-stack-md animate-slide-up-1 relative z-10 text-center">Your Say Hi has been sent!</h1>'
-    + '<p class="text-body-lg font-body-lg text-on-surface-variant max-w-[280px] mx-auto mb-stack-lg animate-slide-up-2 relative z-10 text-center">We\'ll connect you with your new friend within 24 hours. Check your email for updates.</p>'
-    + '<div class="w-full max-w-md mt-stack-md animate-slide-up-3 relative z-10"><button onclick="location.hash=\'locals/' + currentCity + '\'" class="w-full py-4 px-6 rounded-full border border-outline-variant text-on-surface text-headline-md font-headline-md bg-transparent hover:bg-surface-container-low transition-colors duration-300">Back to browsing</button></div></div>';
-}
-
-// ══════════════════════════════════════════════════
-// INIT
-// ══════════════════════════════════════════════════
-window.addEventListener('hashchange', handleRoute);
-window.addEventListener('load', function() {
-  loadAllData().then(function() { handleRoute(); });
-});
-
-</script>
-</body>
-</html>
+    + '<h1 class="text-headline-lg font-headline-lg text-on-surface mb-stack
