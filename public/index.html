@@ -929,12 +929,9 @@ async function submitSayHi(hostId) {
   if (!nameEl || !nameEl.value.trim() || !emailEl || !emailEl.value.trim()) {
     alert('Please fill in all required fields.'); return;
   }
-  // Check if photo is still uploading
   if (_photoUploading) {
     alert('Photo is still uploading, please wait...'); return;
   }
-  var btn = document.getElementById('sayHiSubmit');
-  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   var localResult = findLocal(hostId);
   var localName = localResult ? localResult.local.name : hostId;
   var payload = {
@@ -948,19 +945,17 @@ async function submitSayHi(hostId) {
     local_name: localName,
     session_title: ''
   };
-  try {
-    var resp = await fetch(API_BASE + '/api/say-hi', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-    });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    // Reset photo state on success
-    _photoToken = null;
-    goTo('success');
-  } catch (e) {
-    console.error('submitSayHi error:', e);
-    alert('Failed to send. Please try again.');
-    if (btn) { btn.disabled = false; btn.textContent = 'Send Say Hi'; }
-  }
+  // Immediately show success page (no waiting for API)
+  _photoToken = null;
+  goTo('success');
+  // Fire API call in background
+  fetch(API_BASE + '/api/say-hi', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+  }).then(function(resp) {
+    if (!resp.ok) console.error('Say Hi API error: HTTP ' + resp.status);
+  }).catch(function(e) {
+    console.error('Say Hi background error:', e);
+  });
 }
 
 // ══════════════════════════════════════════════════
