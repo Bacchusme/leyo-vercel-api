@@ -232,6 +232,10 @@ function transformAPILocal(item) {
   } else if (typeof item.avatar === 'string' && (item.avatar.startsWith('http') || item.avatar.startsWith('data:'))) {
     avatarUrl = toProxyUrl(item.avatar);
   }
+  // DEBUG: log raw avatar data to console
+  if (typeof console !== 'undefined') {
+    console.log('[avatar-debug] ' + name + ':', 'avatar_url=' + JSON.stringify(item.avatar_url), 'avatar=' + JSON.stringify(item.avatar), '→ avatarUrl=' + (avatarUrl || '(empty)'));
+  }
   var hangs = parseInt(item.hangs) || 0;
   var rating = parseFloat(item.rating) || 4.5;
   var city = item.city || '';
@@ -368,6 +372,15 @@ async function loadAllData() {
     var rawSessions = results[1];
 
     _localsCache = rawLocals.map(transformAPILocal);
+    // DEBUG: summary of avatar loading
+    if (typeof console !== 'undefined') {
+      var avatarStats = _localsCache.filter(function(l){return l.avatar}).length;
+      console.log('[avatar-debug] === Summary: ' + avatarStats + '/' + _localsCache.length + ' locals have avatar URLs ===');
+      rawLocals.forEach(function(r, i) {
+        var l = _localsCache[i];
+        if (!l.avatar) console.log('[avatar-debug] NO AVATAR: ' + l.name + ', raw keys: ' + Object.keys(r).join(', '));
+      });
+    }
     _sessionsCache = rawSessions.map(function(s) { return transformAPISession(s); });
 
     // Populate avail/upcoming/activities for each local from sessions
