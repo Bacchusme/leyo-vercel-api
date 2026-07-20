@@ -232,10 +232,6 @@ function transformAPILocal(item) {
   } else if (typeof item.avatar === 'string' && (item.avatar.startsWith('http') || item.avatar.startsWith('data:'))) {
     avatarUrl = toProxyUrl(item.avatar);
   }
-  // DEBUG: log raw avatar data to console
-  if (typeof console !== 'undefined') {
-    console.log('[avatar-debug] ' + name + ':', 'avatar_url=' + JSON.stringify(item.avatar_url), 'avatar=' + JSON.stringify(item.avatar), '→ avatarUrl=' + (avatarUrl || '(empty)'));
-  }
   var hangs = parseInt(item.hangs) || 0;
   var rating = parseFloat(item.rating) || 4.5;
   var city = item.city || '';
@@ -372,15 +368,6 @@ async function loadAllData() {
     var rawSessions = results[1];
 
     _localsCache = rawLocals.map(transformAPILocal);
-    // DEBUG: summary of avatar loading
-    if (typeof console !== 'undefined') {
-      var avatarStats = _localsCache.filter(function(l){return l.avatar}).length;
-      console.log('[avatar-debug] === Summary: ' + avatarStats + '/' + _localsCache.length + ' locals have avatar URLs ===');
-      rawLocals.forEach(function(r, i) {
-        var l = _localsCache[i];
-        if (!l.avatar) console.log('[avatar-debug] NO AVATAR: ' + l.name + ', raw keys: ' + Object.keys(r).join(', '));
-      });
-    }
     _sessionsCache = rawSessions.map(function(s) { return transformAPISession(s); });
 
     // Populate avail/upcoming/activities for each local from sessions
@@ -552,17 +539,11 @@ function getLocalSessions(localId) {
   return result;
 }
 
-function avatarFallback(el) {
-  var s = el.offsetWidth || 50;
-  var initial = el.getAttribute('data-initial') || '?';
-  var color = el.getAttribute('data-color') || '#999';
-  el.innerHTML = '<div style="width:100%;height:100%;background:' + color + ';display:flex;align-items:center;justify-content:center;font-size:' + Math.round(s * 0.4) + 'px;font-weight:700;color:#fff">' + initial + '</div>';
-}
 function avatarHTML(l, size, eager) {
   var s = size || 50;
   if (l.avatar) {
     var loadAttr = eager ? ' loading="eager"' : ' loading="lazy"';
-    return '<div class="img-skeleton" data-initial="' + l.initial + '" data-color="' + l.color + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.1)"><img src="' + l.avatar + '" alt="' + l.name + '" class="img-fade" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover" onload="this.classList.add(\'loaded\')" onerror="avatarFallback(this.parentElement)"' + loadAttr + ' /></div>';
+    return '<div class="img-skeleton" data-initial="' + l.initial + '" data-color="' + l.color + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.1)"><img src="' + l.avatar + '" alt="' + l.name + '" class="img-fade" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover" onload="this.classList.add(\'loaded\')" onerror="console.warn(\'[avatar-img-error]\',this.src);this.remove();var p=this.parentElement;p.classList.remove(\'img-skeleton\');p.setAttribute(\'data-initial\',\'' + l.initial + '\');p.setAttribute(\'data-color\',\'' + l.color + '\');if(typeof avatarFallback===\'function\')avatarFallback(p);"' + loadAttr + ' /></div>';
   }
   return '<div style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + l.color + ';display:flex;align-items:center;justify-content:center;font-size:' + Math.round(s * 0.4) + 'px;font-weight:700;color:#fff;flex-shrink:0">' + l.initial + '</div>';
 }
@@ -652,7 +633,7 @@ function renderSessionsPage() {
   html += '<section class="px-container-margin py-stack-sm overflow-x-auto hide-scrollbar whitespace-nowrap sticky top-16 bg-surface/90 backdrop-blur z-30">';
   html += renderCitySelector('sessions');
   html += '</section>';
-  html += '<section class="px-container-margin py-stack-lg"><h2 class="text-headline-lg font-headline-lg text-on-background mb-2">Leyo</h2>';
+  html += '<section class="px-container-margin py-stack-lg"><h2 class="text-headline-lg font-headline-lg text-on-background mb-2">Explore Experiences</h2>';
   html += '<p class="text-body-md font-body-md text-secondary">Join an upcoming session \u2014 or say hi to start a new one</p></section>';
 
   if (sayhi.length > 0) {
@@ -756,7 +737,7 @@ function renderLocalDetail(localId) {
   }
 
   html += '<section class="flex flex-col gap-stack-md"><h3 class="text-headline-md font-headline-md text-on-surface">Available Next</h3>';
-  html += '<div class="flex overflow-x-auto gap-4 pb-4 -mx-container-margin px-container-margin snap-x hide-scrollbar">';
+  html += '<div class="flex overflow-x-auto gap-4 pb-4 snap-x hide-scrollbar" style="margin-left:-20px;margin-right:-20px;padding-left:24px;padding-right:24px">';
 
   (l.avail || []).forEach(function(a) {
     var session = findSessionByHostAndTitle(l.name, a.t);
@@ -830,7 +811,7 @@ function renderSessionDetail(sessionId) {
   var html = '';
   html += '<header class="fixed top-0 left-0 w-full z-50 bg-surface/90 backdrop-blur-md flex justify-between items-center px-container-margin h-16 border-b border-surface-variant/50">';
   html += '<button onclick="history.back()" class="p-2 -ml-2 rounded-full hover:bg-surface-container transition-colors active:scale-95 text-on-surface text-xl">&#8592;</button>';
-  html += '<div class="flex-1"></div></header>';
+  html += '<h1 class="flex-1 text-center text-headline-md font-headline-md text-on-surface">Leyo</h1></header>';
   html += '<div class="mt-16 w-full h-[240px] relative rounded-b-2xl overflow-hidden shadow-[0px_4px_20px_rgba(0,0,0,0.02)]">';
   html += '<div class="img-skeleton w-full h-full absolute inset-0"></div>';
   if (s.img) { html += '<img class="w-full h-full object-cover img-fade relative" src="' + s.img + '" alt="' + s.title + '" loading="eager" onload="this.classList.add(\'loaded\');this.parentElement.querySelector(\'.img-skeleton\').style.display=\'none\'" onerror="this.parentElement.style.background=\'linear-gradient(135deg,#ff5c00,#ffb59a)\';this.parentElement.querySelector(\'.img-skeleton\').style.display=\'none\'">'; }
@@ -948,9 +929,12 @@ async function submitSayHi(hostId) {
   if (!nameEl || !nameEl.value.trim() || !emailEl || !emailEl.value.trim()) {
     alert('Please fill in all required fields.'); return;
   }
+  // Check if photo is still uploading
   if (_photoUploading) {
     alert('Photo is still uploading, please wait...'); return;
   }
+  var btn = document.getElementById('sayHiSubmit');
+  if (btn) { btn.disabled = true; btn.textContent = 'Sending...'; }
   var localResult = findLocal(hostId);
   var localName = localResult ? localResult.local.name : hostId;
   var payload = {
@@ -964,17 +948,21 @@ async function submitSayHi(hostId) {
     local_name: localName,
     session_title: ''
   };
-  // Immediately show success page (no waiting for API)
-  _photoToken = null;
-  goTo('success');
-  // Fire API call in background
-  fetch(API_BASE + '/api/say-hi', {
-    method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
-  }).then(function(resp) {
-    if (!resp.ok) console.error('Say Hi API error: HTTP ' + resp.status);
-  }).catch(function(e) {
-    console.error('Say Hi background error:', e);
-  });
+  try {
+    var resp = await fetch(API_BASE + '/api/say-hi', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
+    });
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    // Reset photo state on success
+    _photoToken = null;
+    goTo('success');
+  } catch (e) {
+    console.error('submitSayHi error:', e);
+    var errMsg = e.message || 'Unknown error';
+    console.error('Error details:', errMsg, resp ? resp.status : 'no response');
+    alert('Failed to send: ' + errMsg + '. Please try again.');
+    if (btn) { btn.disabled = false; btn.textContent = 'Send Say Hi'; }
+  }
 }
 
 // ══════════════════════════════════════════════════
