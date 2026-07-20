@@ -1,10 +1,10 @@
 // api/image.js
-// GET /api/image?token=<file_token> - 代理下载飞书媒体文件
-// 解决飞书图片 URL 需要鉴权、浏览器无法直接访问的问题
+// GET /api/image?token=<file_token>&url=<direct_url>
+// 服务端代理下载飞书图片，解决浏览器跨域/鉴权问题
 
 const { downloadMedia, getTenantToken } = require("../lib/feishu");
 
-// 备用方案：直接用飞书 Drive API 获取预签名 URL
+// 备用方案：batch_get_tmp_download_url 获取预签名 URL
 async function getSignedUrl(fileToken) {
   const token = await getTenantToken();
   const url = `https://open.feishu.cn/open-apis/drive/v1/medias/batch_get_tmp_download_url?file_tokens=${fileToken}`;
@@ -18,71 +18,69 @@ async function getSignedUrl(fileToken) {
   return null;
 }
 
+// 方案3：服务端直接抓取飞书直链（浏览器跨域但服务端不受限）
+async function proxyDirectUrl(directUrl) {
+  const resp = await fetch(directUrl, { redirect: "follow" });
+  if (!resp.ok) throw new Error(`Direct URL HTTP ${resp.status}`);
+  const contentType = resp.headers.get("content-type") || "image/jpeg";
+  const buffer = Buffer.from(await resp.arrayBuffer());
+  return { buffer, contentType };
+}
+
 module.exports = async function handler(req, res) {
   // CORS headers
   res.setHeader("Access-Control-Allow-Origin", "*");
   res.setHeader("Access-Control-Allow-Methods", "GET, OPTIONS");
   res.setHeader("Access-Control-Allow-Headers", "Content-Type");
 
-  if (req.method === "OPTIONS") {
-    return res.status(200).end();
+  if (req.method === "OPTIONS") return res.status(200).end();
+  if (req.method !== "GET") return res.status(405).json({ error: "仅支持 GET 请求" });
+
+  const { token, url: directUrl } = req.query;
+
+  if (!token && !directUrl) {
+    return res.status(400).json({ success: false, error: "缺少 token 或 url 参数" });
   }
 
-  if (req.method !== "GET") {
-    return res.status(405).json({ error: "仅支持 GET 请求" });
-  }
-
-  const { token } = req.query;
-
-  if (!token) {
-    return res.status(400).json({ 
-      success: false, 
-      error: "缺少 token 参数。用法: /api/image?token=<file_token>" 
-    });
-  }
-
-  // 方案1：直接下载媒体
-  try {
-    const feishuResp = await downloadMedia(token);
-
-    // 设置缓存（Vercel CDN 缓存 1 小时，浏览器缓存 10 分钟）
-    res.setHeader("Cache-Control", "public, s-maxage=3600, max-age=600");
-
-    // 转发 Content-Type（飞书返回的图片类型）
-    const contentType = feishuResp.headers.get("content-type");
-    if (contentType) {
-      res.setHeader("Content-Type", contentType);
-    } else {
-      res.setHeader("Content-Type", "application/octet-stream");
+  // === 方案1：直接下载媒体（drive API） ===
+  if (token) {
+    try {
+      const feishuResp = await downloadMedia(token);
+      res.setHeader("Cache-Control", "public, s-maxage=3600, max-age=600");
+      const contentType = feishuResp.headers.get("content-type");
+      res.setHeader("Content-Type", contentType || "application/octet-stream");
+      const buffer = await feishuResp.arrayBuffer();
+      return res.status(200).send(Buffer.from(buffer));
+    } catch (err) {
+      console.error("[/api/image] 方案1 downloadMedia 失败:", err.message);
     }
+  }
 
-    // 转发 Content-Length（如果有）
-    const contentLength = feishuResp.headers.get("content-length");
-    if (contentLength) {
-      res.setHeader("Content-Length", contentLength);
-    }
-
-    // 获取图片二进制数据
-    const buffer = await feishuResp.arrayBuffer();
-    return res.status(200).send(Buffer.from(buffer));
-
-  } catch (err) {
-    console.error("[/api/image] 方案1失败:", err.message);
-    
-    // 方案2：尝试获取预签名 URL
+  // === 方案2：batch_get_tmp_download_url → 302 重定向 ===
+  if (token) {
     try {
       const signedUrl = await getSignedUrl(token);
       if (signedUrl) {
-        console.log("[/api/image] 使用预签名URL重定向");
+        console.log("[/api/image] 方案2 使用预签名URL重定向");
         return res.redirect(302, signedUrl);
       }
-    } catch (err2) {
-      console.error("[/api/image] 方案2也失败:", err2.message);
+    } catch (err) {
+      console.error("[/api/image] 方案2 batch_get_tmp 失败:", err.message);
     }
-
-    return res.status(500).json({ 
-      success: false, 
-      error: err.message 
-    });
   }
+
+  // === 方案3：服务端代理飞书直链 ===
+  if (directUrl) {
+    try {
+      const { buffer, contentType } = await proxyDirectUrl(directUrl);
+      res.setHeader("Cache-Control", "public, s-maxage=3600, max-age=600");
+      res.setHeader("Content-Type", contentType);
+      console.log("[/api/image] 方案3 代理直链成功");
+      return res.status(200).send(buffer);
+    } catch (err) {
+      console.error("[/api/image] 方案3 proxyDirectUrl 失败:", err.message);
+    }
+  }
+
+  return res.status(500).json({ success: false, error: "所有下载方案均失败" });
 };
