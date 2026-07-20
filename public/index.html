@@ -303,16 +303,16 @@ function transformAPISession(item) {
   var imgUrl = '';
   if (gallary.length > 0) {
     var g0 = gallary[0];
-    // 优先用飞书直链
-    if (g0.url) {
-      imgUrl = g0.url;
-    } else if (g0.file_token) {
-      imgUrl = API_BASE + '/api/image?token=' + g0.file_token;
+    // 统一走代理端点，服务端有三层兜底（downloadMedia / batch_tmp / 直链代理）
+    if (g0.file_token) {
+      imgUrl = API_BASE + '/api/image?token=' + encodeURIComponent(g0.file_token) + (g0.url ? '&url=' + encodeURIComponent(g0.url) : '');
+    } else if (g0.url) {
+      imgUrl = API_BASE + '/api/image?url=' + encodeURIComponent(g0.url);
     }
   }
   var detailImgs = gallary.slice(1).map(function(g) {
-    if (g.url) return g.url;
-    if (g.file_token) return API_BASE + '/api/image?token=' + g.file_token;
+    if (g.file_token) return API_BASE + '/api/image?token=' + encodeURIComponent(g.file_token) + (g.url ? '&url=' + encodeURIComponent(g.url) : '');
+    if (g.url) return API_BASE + '/api/image?url=' + encodeURIComponent(g.url);
     return '';
   }).filter(Boolean);
   var reviews = parseReviews(item.reviews);
@@ -971,15 +971,18 @@ async function submitSayHi(hostId) {
     var resp = await fetch(API_BASE + '/api/say-hi', {
       method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload)
     });
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    if (!resp.ok) {
+      var errBody = '';
+      try { var errJson = await resp.json(); errBody = errJson.error || JSON.stringify(errJson); } catch(e2) { errBody = await resp.text().catch(function(){return '';}); }
+      console.error('submitSayHi server error:', resp.status, errBody);
+      throw new Error(errBody || ('HTTP ' + resp.status));
+    }
     // Reset photo state on success
     _photoToken = null;
     goTo('success');
   } catch (e) {
     console.error('submitSayHi error:', e);
-    var errMsg = e.message || 'Unknown error';
-    console.error('Error details:', errMsg, resp ? resp.status : 'no response');
-    alert('Failed to send: ' + errMsg + '. Please try again.');
+    alert('Failed to send: ' + e.message + '. Please try again.');
     if (btn) { btn.disabled = false; btn.textContent = 'Send Say Hi'; }
   }
 }
