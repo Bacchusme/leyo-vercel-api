@@ -224,10 +224,12 @@ function transformAPILocal(item) {
   } else if (Array.isArray(item.avatar) && item.avatar.length > 0) {
     // 附件字段：数组格式 [{url, file_token, name}]
     var att = item.avatar[0];
-    if (att.file_token) {
+    // 优先用飞书直链（预签名URL，浏览器可直接加载）
+    if (att.url) {
+      avatarUrl = att.url;
+    } else if (att.file_token) {
+      // 兜底：走代理下载
       avatarUrl = API_BASE + '/api/image?token=' + att.file_token;
-    } else if (att.url) {
-      avatarUrl = toProxyUrl(att.url);
     }
   } else if (typeof item.avatar === 'string' && (item.avatar.startsWith('http') || item.avatar.startsWith('data:'))) {
     avatarUrl = toProxyUrl(item.avatar);
@@ -300,15 +302,16 @@ function transformAPISession(item) {
   var imgUrl = '';
   if (gallary.length > 0) {
     var g0 = gallary[0];
-    if (g0.file_token) {
+    // 优先用飞书直链
+    if (g0.url) {
+      imgUrl = g0.url;
+    } else if (g0.file_token) {
       imgUrl = API_BASE + '/api/image?token=' + g0.file_token;
-    } else if (g0.url) {
-      imgUrl = toProxyUrl(g0.url);
     }
   }
   var detailImgs = gallary.slice(1).map(function(g) {
+    if (g.url) return g.url;
     if (g.file_token) return API_BASE + '/api/image?token=' + g.file_token;
-    if (g.url) return toProxyUrl(g.url);
     return '';
   }).filter(Boolean);
   var reviews = parseReviews(item.reviews);
@@ -543,7 +546,7 @@ function avatarHTML(l, size, eager) {
   var s = size || 50;
   if (l.avatar) {
     var loadAttr = eager ? ' loading="eager"' : ' loading="lazy"';
-    return '<div class="img-skeleton" data-initial="' + l.initial + '" data-color="' + l.color + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.1)"><img src="' + l.avatar + '" alt="' + l.name + '" class="img-fade" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover" onload="this.classList.add(\'loaded\')" onerror="console.warn(\'[avatar-img-error]\',this.src);this.remove();var p=this.parentElement;p.classList.remove(\'img-skeleton\');p.setAttribute(\'data-initial\',\'' + l.initial + '\');p.setAttribute(\'data-color\',\'' + l.color + '\');if(typeof avatarFallback===\'function\')avatarFallback(p);"' + loadAttr + ' /></div>';
+    return '<div class="img-skeleton" data-initial="' + l.initial + '" data-color="' + l.color + '" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;overflow:hidden;flex-shrink:0;box-shadow:0 1px 3px rgba(0,0,0,.1)"><img src="' + l.avatar + '" alt="' + l.name + '" class="img-fade" style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;object-fit:cover" onload="this.classList.add(\'loaded\')" onerror="console.warn(\'[avatar-img-error]\',this.src);var p=this.parentElement;this.remove();if(p){p.classList.remove(\'img-skeleton\');p.setAttribute(\'data-initial\',\'' + l.initial + '\');p.setAttribute(\'data-color\',\'' + l.color + '\');if(typeof avatarFallback===\'function\')avatarFallback(p);}"' + loadAttr + ' /></div>';
   }
   return '<div style="width:' + s + 'px;height:' + s + 'px;border-radius:50%;background:' + l.color + ';display:flex;align-items:center;justify-content:center;font-size:' + Math.round(s * 0.4) + 'px;font-weight:700;color:#fff;flex-shrink:0">' + l.initial + '</div>';
 }
