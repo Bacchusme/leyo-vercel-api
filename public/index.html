@@ -223,7 +223,8 @@ function transformAPILocal(item) {
     // 服务端已下载好的 base64 数据，直接使用
     avatarUrl = item.avatar_data;
   } else if (item.avatar_url) {
-    avatarUrl = toProxyUrl(item.avatar_url);
+    // avatar_url 是 batch_get_tmp_download_url 返回的临时公开链接，直接使用
+    avatarUrl = item.avatar_url;
   } else if (Array.isArray(item.avatar) && item.avatar.length > 0) {
     var att = item.avatar[0];
     // 统一走代理端点，服务端有三层兜底（downloadMedia / batch_tmp / 直链代理）
@@ -300,21 +301,27 @@ function parseReviews(text) {
 
 function transformAPISession(item) {
   var gallary = Array.isArray(item.gallary) ? item.gallary : [];
+  var galleryUrls = Array.isArray(item.gallery_urls) ? item.gallery_urls : [];
   var imgUrl = '';
-  if (gallary.length > 0) {
+  // 优先使用 gallery_urls（临时公开链接，直接使用）
+  if (galleryUrls.length > 0) {
+    imgUrl = galleryUrls[0] || '';
+  } else if (gallary.length > 0) {
+    // 兜底：走代理端点
     var g0 = gallary[0];
-    // 统一走代理端点，服务端有三层兜底（downloadMedia / batch_tmp / 直链代理）
     if (g0.file_token) {
       imgUrl = API_BASE + '/api/image?token=' + encodeURIComponent(g0.file_token) + (g0.url ? '&url=' + encodeURIComponent(g0.url) : '');
     } else if (g0.url) {
       imgUrl = API_BASE + '/api/image?url=' + encodeURIComponent(g0.url);
     }
   }
-  var detailImgs = gallary.slice(1).map(function(g) {
-    if (g.file_token) return API_BASE + '/api/image?token=' + encodeURIComponent(g.file_token) + (g.url ? '&url=' + encodeURIComponent(g.url) : '');
-    if (g.url) return API_BASE + '/api/image?url=' + encodeURIComponent(g.url);
-    return '';
-  }).filter(Boolean);
+  var detailImgs = galleryUrls.length > 1
+    ? galleryUrls.slice(1).filter(Boolean)
+    : gallary.slice(1).map(function(g) {
+        if (g.file_token) return API_BASE + '/api/image?token=' + encodeURIComponent(g.file_token) + (g.url ? '&url=' + encodeURIComponent(g.url) : '');
+        if (g.url) return API_BASE + '/api/image?url=' + encodeURIComponent(g.url);
+        return '';
+      }).filter(Boolean);
   var reviews = parseReviews(item.reviews);
   var ratingStr = '';
   if (reviews.length > 0) {
