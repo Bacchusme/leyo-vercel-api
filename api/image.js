@@ -14,25 +14,19 @@ function withTimeout(promise, ms) {
   ]);
 }
 
-async function downloadViaSignedUrl(fileToken) {
-  const token = await getTenantToken();
-  const url = `https://open.feishu.cn/open-apis/drive/v1/medias/batch_get_tmp_download_url?file_tokens=${fileToken}`;
-  const resp = await fetch(url, {
-    headers: { Authorization: `Bearer ${token}` },
-  });
-  if (!resp.ok) throw new Error(`batch_get_tmp HTTP ${resp.status}`);
-  const data = await resp.json();
-  if (data.code !== 0) throw new Error(`batch_get_tmp code ${data.code}: ${data.msg}`);
-  if (!data.data?.tmp_download_urls?.length) throw new Error("无临时下载URL");
-
-  const tmpUrl = data.data.tmp_download_urls[0].tmp_download_url;
-  const imgResp = await fetch(tmpUrl, { redirect: "follow" });
-  if (!imgResp.ok) throw new Error(`临时URL下载 HTTP ${imgResp.status}`);
-  const contentType = imgResp.headers.get("content-type") || "image/jpeg";
-  const buffer = Buffer.from(await imgResp.arrayBuffer());
-  return { buffer, contentType };
+// 从飞书附件 URL 中提取 extra 参数（多维表格附件下载必需）
+function extractExtraFromUrl(directUrl) {
+  if (!directUrl) return null;
+  try {
+    const u = new URL(directUrl);
+    const extra = u.searchParams.get("extra");
+    return extra || null;
+  } catch {
+    return null;
+  }
 }
 
+// 方案3：服务端直接代理飞书直链（URL自带extra鉴权参数）
 async function proxyDirectUrl(directUrl) {
   const resp = await fetch(directUrl, { redirect: "follow" });
   if (!resp.ok) throw new Error(`Direct URL HTTP ${resp.status}`);
@@ -54,16 +48,19 @@ module.exports = async function handler(req, res) {
     return res.status(400).json({ success: false, error: "缺少 token 或 url 参数" });
   }
 
+  // 从直链 URL 中提取 extra 参数（多维表格附件必需）
+  const extra = extractExtraFromUrl(directUrl);
   const errors = [];
 
+  // === 方案1：Drive API 下载（带 extra 参数 + 超时保护） ===
   if (token) {
     try {
-      const feishuResp = await withTimeout(downloadMedia(token), 8000);
+      const feishuResp = await withTimeout(downloadMedia(token, extra), 8000);
       res.setHeader("Cache-Control", "public, s-maxage=86400, max-age=3600");
       const contentType = feishuResp.headers.get("content-type");
       res.setHeader("Content-Type", contentType || "application/octet-stream");
       const buffer = await feishuResp.arrayBuffer();
-      console.log("[/api/image] 方案1 成功, size:", buffer.byteLength);
+      console.log("[/api/image] 方案1 成功, size:", buffer.byteLength, "extra:", !!extra);
       return res.status(200).send(Buffer.from(buffer));
     } catch (err) {
       errors.push("方案1: " + err.message);
@@ -71,9 +68,10 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  if (token) {
+  // === 方案2：服务端代理飞书直链（URL自带extra鉴权参数） ===
+  if (directUrl) {
     try {
-      const { buffer, contentType } = await withTimeout(downloadViaSignedUrl(token), 8000);
+      const { buffer, contentType } = await withTimeout(proxyDirectUrl(directUrl), 8000);
       res.setHeader("Cache-Control", "public, s-maxage=86400, max-age=3600");
       res.setHeader("Content-Type", contentType);
       console.log("[/api/image] 方案2 成功, size:", buffer.length);
@@ -84,19 +82,11 @@ module.exports = async function handler(req, res) {
     }
   }
 
-  if (directUrl) {
-    try {
-      const { buffer, contentType } = await withTimeout(proxyDirectUrl(directUrl), 8000);
-      res.setHeader("Cache-Control", "public, s-maxage=86400, max-age=3600");
-      res.setHeader("Content-Type", contentType);
-      console.log("[/api/image] 方案3 成功, size:", buffer.length);
-      return res.status(200).send(buffer);
-    } catch (err) {
-      errors.push("方案3: " + err.message);
-      console.error("[/api/image] 方案3 失败:", err.message);
-    }
-  }
-
+  // 全部失败
   console.error("[/api/image] 全部失败:", errors.join(" | "));
-  return res.status(500).json({ success: false, error: "所有下载方案均失败", details: errors });
+  return res.status(500).json({
+    success: false,
+    error: "所有下载方案均失败",
+    details: errors,
+  });
 };
